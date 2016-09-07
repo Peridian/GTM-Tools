@@ -1,0 +1,31 @@
+{
+  "name": "gtm-tools",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "forever": "forever -w -d -m 1 index.js",
+    "test": "node index.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "async": "^2.0.1",
+    "bluebird": "^3.4.4",
+    "ga-extractor": "^0.6.0",
+    "google-auth-library": "^0.9.8",
+    "google-sheets-node-api": "^0.3.0",
+    "google-spreadsheet": "^2.0.3",
+    "google-spreadsheets": "^0.5.1",
+    "googleanalytics": "^0.3.7",
+    "googleapis": "^12.4.0",
+    "http": "0.0.0",
+    "promise": "^7.1.1",
+    "request": "^2.74.0",
+    "request-promise": "^4.1.1"
+  },
+  "devDependencies": {
+    "forever": "^0.15.2",
+    "nodemon": "^1.10.2"
+  }
+}
