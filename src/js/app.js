@@ -1,323 +1,357 @@
 'use strict';
 
-console.log('\n');
-console.log('-----');
-console.log('NOW RUNNING: ' + __filename.split('\\').pop());
-console.log('-----');
-console.log('\n');
+var declaring = require('./declaring.js');
+
+declaring.start(__filename.split('\\').pop());
 
 var
     google = require('googleapis')
     , P = require('bluebird')
-    , key =
-        /* 
-        require('./client_secret.json')
-        */
-        require('./jsonFodao.json')
-    , scopes = [
-        'https://www.googleapis.com/auth/analytics.readonly'
-        , 'https://www.googleapis.com/auth/tagmanager.readonly'
-        , 'https://www.googleapis.com/auth/tagmanager.manage.accounts'
-    ]
     ;
 
-var
-    OAuth2Client = google.auth.OAuth2
-    , jwtClient = new google.auth.JWT(
-        key.client_email
-        , null
-        , key.private_key
-        , scopes
-        , null
-    )
-    ;
+module.exports = {
+    GA: {
+        analytics: google.analytics('v3')
+        , logs: {
+            messages: {
+                empty: function (data) {
+                    console.log('- No ' + data.kind.split('#').pop() + ' to be found...')
+                    //console.log('- This ' + elementType + ' has no ')
+                }
+                , entering: function (data, self) {
+                    var item = data.items[0];
+                    console.log('\n')
+                    console.log('- Entering ' + item.kind.split('#').pop() + ' "' + item.name + '"...')
+                    console.log('\n')
+                }
+                , kind: function (data) {
+                    var kind = data.items[0].kind.split('#').pop();
 
-var
-    oauth2Client = new OAuth2Client(
-        key.client_id
-        , key.client_secret
-        , key.redirect_uris
-    )
-    , app = {
-        GA: {
-            analytics: google.analytics('v3')
-            , accounts: function (jwtClient) {
-                console.log('----- GA.accounts')
-                var self = this;
-                return new P(function (resolve, reject) {
-                    self.analytics.management.accounts.list
+                    return 'aeiou'.indexOf(kind[0].toLowerCase()) !== -1
+                        ? 'n ' + kind
+                        : ' ' + kind
+                }
+                , choose: function (data, self) {
+                    var kind = data.items[0].kind.split('#').pop();
+
+                    kind = 'aeiou'.indexOf(kind[0].toLowerCase()) !== -1
+                        ? 'n ' + kind
+                        : ' ' + kind
+
+                    return console.log(
+                        '\n- Please, choose a' + self.logs.messages.kind(data) + ':\n'
+                        , data.items.map(function (e, i, a) {
+                            return '"' + i + '" for "' + e.name + '"'
+                        }).join('\n ')
+                        , '\n'
+                    )
+                }
+            }
+            , data: function (data) {
+                console.log('\n')
+                console.log(data)
+                console.log('\n')
+            }
+        }
+        , accounts: function (jwtClient) {
+            console.log('----- GA.accounts')
+            var self = this;
+            return new P(function (resolve, reject) {
+                self.analytics.management.accounts.list
+                    //TODO: change with consent screen?
+                    ({ auth: jwtClient }
+                    , function (err, res) {
+                        if (err) reject(err);
+                        resolve(res);
+                    })
+            });
+        }
+        , webProperties: function (jwtClient, accNum) {
+            console.log('----- GA.webProperties');
+            var self = this;
+            return new P(function (resolve, reject) {
+                var accounts = self.accounts(jwtClient)
+                accounts.then(function (data) {
+
+                    /*
+                    TODO:
+                    Change for interface choice
+                    A gateway validation as well if user has no selected account to look at
+                    */
+                    var
+                        accountId = ''
+                        , pass = (
+                            accNum != undefined
+                            &&
+                            data.items.length != 0
+                            &&
+                            (accNum + 1) <= data.items.length
+                        )
+
+                    if (pass)
+                        accountId = data.items[accNum].id;
+                    else
+                        if (data.items.length == 0)
+                            return self.messages.empty(data);
+                        else if (data.items.length == 1) {
+                            self.logs.messages.entering(data, self);
+                            accountId = data.items[0].id;
+                        } else return self.logs.messages.choose(data, self)
+
+                    self.analytics.management.webproperties.list({
                         //TODO: change with consent screen?
-                        ({ auth: jwtClient }
+                        auth: jwtClient
+                        , accountId: accountId
+                    }
                         , function (err, res) {
                             if (err) reject(err);
-                            resolve(
-                                res.items.map(function (e, i) {
-                                    return {
-                                        //TODO: decide on result format
-                                        accountId: e.id
-                                        , name: e.name
-                                    };
-                                })
-                            );
+                            resolve(res);
                         })
                 });
-            }
-            , webProperties: function (jwtClient) {
-                console.log('----- GA.properties');
-                var self = this;
-                return new P(function (resolve, reject) {
-                    var accounts = self.accounts(jwtClient)
-                    accounts.then(function (data) {
-                        /*
-                        TODO:
-                        Change for interface choice
-                        A gateway validation as well if user has no selected account to look at
+            });
+        }
+        , profiles: function (jwtClient, accNum, webPropNum) {
+            console.log('----- GA.profiles');
+            var self = this;
+            return new P(function (resolve, reject) {
+                var properties = self.webProperties(jwtClient, accNum)
+                properties.then(function (data) {
+                    var
+                        accountId = ''
+                        , webPropertyId = ''
+                        , length = data.items.length
+                        , pass = (
+                            (webPropNum != undefined)
+                            &&
+                            data.items.length != 0
+                            &&
+                            (webPropNum + 1) <= data.items.length
+                        )
+
+                    if (pass) {
+                        var item = data.items[webPropNum];
+                        accountId = item.accountId;
+                        webPropertyId = item.id;
+                    } else
+                        if (data.items.length == 0)
+                            return self.logs.messages.empty(data);
+                        else if (data.items.length == 1) {
+                            self.logs.messages.entering(data, self);
+                            accountId = data.items[0].accountId;
+                            webPropertyId = data.items[0].id;
+                        } else return self.logs.messages.choose(data, self)
+
+                    /*
+                    TODO:
+                    Change for interface choice
+                    A gateway validation as well if user has no selected account to look at
                         */
-                        var accountId = data[1].accountId;
-                        self.analytics.management.webproperties.list({
+                    self.analytics.management.profiles.list(
+                        {
                             //TODO: change with consent screen?
                             auth: jwtClient
                             , accountId: accountId
-                        }
-                            , function (err, res) {
-                                if (err) reject(err);
-                                resolve(res);
-                            })
-                    });
-                });
-            }
-            , profiles: function (jwtClient) {
-                console.log('----- GA.propertyViews');
-                var self = this;
-                return new P(function (resolve, reject) {
-                    var properties = self.webProperties(jwtClient)
-                    properties.then(function (data) {
-                        /*
-                        TODO:
-                        Change for interface choice
-                        A gateway validation as well if user has no selected account to look at
-                        */
-                        var webProperty = data.items[0];
-                        self.analytics.management.profiles.list(
-                            {
-                                //TODO: change with consent screen?
-                                auth: jwtClient
-                                , accountId: webProperty.accountId
-                                , webPropertyId: webProperty.id
-                                ,
-                            }, function (err, res) {
-                                if (err) reject(err)
-                                resolve(res)
-                            }
-                        )
-                    });
-                });
-            }
-            , events: function (jwtClient) {
-                console.log('----- GA.events');
-                var self = this;
-                return new P(function (resolve, reject) {
-                    var profiles = self.profiles(jwtClient)
-                    profiles.then(function (data) {
-                        /*
-                        TODO:
-                        Change for interface choice
-                        A gateway validation as well if user has no selected account to look at
-                        */
-                        var
-                            profile = data.items[0]
-                            , metrics = ['ga:totalEvents']
-                            , dimensions = [
-                                'ga:eventCategory'
-                                , 'ga:eventAction'
-                            ]
-                            , params = {
-                                //TODO: change with consent screen?
-                                auth: jwtClient
-                                , ids: 'ga:' + profile.id
-                                , 'start-date': '2016-09-01'
-                                , 'end-date': '2016-09-03'
-                                , metrics: metrics.join(', ')
-                                , dimensions: dimensions.join(', ')
-                            }
-                            ;
-                        self.analytics.data.ga.get(params, function (err, res) {
+                            , webPropertyId: webPropertyId
+                        }, function (err, res) {
                             if (err) reject(err)
-                            resolve(
-                                res
-                                /*
-                                    .rows.map(function (e, i) {
-                                    return {
-                                        category: e[0]
-                                        , action: e[1]
-                                        , label: e[2]
-                                    }
-
-                                }
-                        )
-                                */
-                            )
-                        })
-                    });
+                            resolve(res)
+                        }
+                    )
                 });
-            }
+            });
         }
-        , GTM: {
-            tagManager: google.tagmanager('v1')
-            , accounts: function (jwtClient) {
-                console.log('----- GTM.accounts')
-                var self = this;
-                return new P(function (resolve, reject) {
-                    self.tagManager.accounts.list(
-                        //TODO: change with consent screen?
-                        { auth: jwtClient }
-                        , function (err, response) {
-                            if (err) reject(err);
-                            resolve(response.accounts);
-                        });
-                });
-            }
-            , containers: function (jwtClient) {
-                console.log('----- GTM.containers')
-                var self = this;
-                return new P(function (resolve, reject) {
-                    var accounts = self.accounts(jwtClient);
-                    accounts.then(function (data) {
-                        /*
-                        TODO:
-                        Change for interface choice
-                        A gateway validation as well if user has no selected account to look at
-                        */
-                        var id = data[1].accountId;
-                        console.log('Conta: ' + data[1].name + '\n')
-                        self.tagManager.accounts.containers.list(
-                            {
-                                //TODO: change with consent screen?
-                                auth: jwtClient
-                                , accountId: id
+        , events: function (jwtClient, accNum, webPropNum, profNum, query) {
+            console.log('----- GA.events');
+            var self = this;
+            return new P(function (resolve, reject) {
+                var profiles = self.profiles(jwtClient, accNum, webPropNum)
+                profiles.then(function (data) {
+                    /*
+                    TODO:
+                    Change for interface choice
+                    A gateway validation as well if user has no selected account to look at
+                    */
+
+                    var
+                        pass = (
+                            profNum != undefined
+                            &&
+                            data.items.length >= 1
+                            &&
+                            (profNum + 1) <= data.items.length
+                        )
+                        , profile = ''
+                        ;
+
+                    if (pass) {
+                        profile = data.items[profNum].id
+                        query.ids = 'ga:' + profile
+                    } else
+                        if (data.items.length == 0)
+                            return self.messages.empty(data);
+                        else if (data.items.length == 1) {
+                            self.messages.entering(data, self);
+                            profile = data.items[0].id;
+                        } else return self.messages.choose(data, self)
+
+                    self.analytics.data.ga.get(query, function (err, res) {
+                        if (err) reject(err)
+                        resolve(
+                            res
+                            /*
+                                .rows.map(function (e, i) {
+                                return {
+                                    category: e[0]
+                                    , action: e[1]
+                                    , label: e[2]
+                                }
+         
                             }
-                            , function (err, response) {
-                                if (err) reject(err);
-                                resolve({
-                                    accountId: id
-                                    , data: response
-                                });
-                            });
+                    )
+                            */
+                        )
                     })
                 });
-            }
-            , tags: function (jwtClient, type) {
-                console.log('----- GTM.tags')
-                var self = this;
-                return new P(function (resolve, reject) {
-                    var containers = self.containers(jwtClient);
-                    containers.then(function (data) {
-                        /*
-                        TODO:
-                        Change for interface choice
-                        A gateway validation as well if user has no selected account to look at
-                        */
-                        var
-                            accountId = data.accountId
-                            , containerNum = 1
-                            , containerId = data.data.containers[containerNum].containerId;
-
-                        console.log('Container: ' + data.data.containers[containerNum].name + '\n')
-
-                        self.tagManager.accounts.containers.tags.list({
-                            //TODO: change with consent screen?
-                            auth: jwtClient
-                            , accountId: accountId
-                            , containerId: containerId
-                        }
-                            , function (err, response) {
-                                if (err) reject(err);
-
-                                resolve(response)
-                                /* 
-                                                                var
-                                                                    array = []
-                                                                    , tags = response.tags
-                                                                    ;
-                                
-                                                                tags.forEach(function (e, i, a) {
-                                                                    if (e.type == 'type')
-                                                                        array.push(e);
-                                                                });
-                                
-                                                                resolve(array);
-                                */
-
-
-                            });
-                    });
-                });
-            }
+            });
         }
     }
-    ;
+    , GTM: {
+        tagManager: google.tagmanager('v1')
+        , logs: {
+            messages: {
+                empty: function (data) {
+                    console.log('- No ' + data.kind.split('#').pop() + ' to be found...')
+                    //console.log('- This ' + elementType + ' has no ')
+                }
+                , entering: function (data, self) {
+                    var item = data.items[0];
+                    console.log('\n')
+                    console.log('- Entering ' + item.kind.split('#').pop() + ' "' + item.name + '"...')
+                    console.log('\n')
+                }
+                , kind: function (data) {
+                    var kind = data.items[0].kind.split('#').pop();
 
+                    return 'aeiou'.indexOf(kind[0].toLowerCase()) !== -1
+                        ? 'n ' + kind
+                        : ' ' + kind
+                }
+                , choose: function (data, self) {
+                    var kind = data.items[0].kind.split('#').pop();
 
-app.GTM.accounts(jwtClient).then(function (data) {
-    console.log('data')
-    console.log(data)
-});
-/* 
-app.GA.events(jwtClient).then(function (events) {
-    app.GTM.tags(jwtClient).then(function (tagsData) {
-        console.log('tagsData')
-        console.log(tagsData.tags[0])
-        console.log('-')
-        console.log(tagsData.tags[0].parameter)
-        console.log('-----')
-        var
-            textObj = {
-                event: ''
-                , tag: ''
+                    kind = 'aeiou'.indexOf(kind[0].toLowerCase()) !== -1
+                        ? 'n ' + kind
+                        : ' ' + kind
+
+                    return console.log(
+                        '\n- Please, choose a' + self.logs.messages.kind(data) + ':\n'
+                        , data.items.map(function (e, i, a) {
+                            return '"' + i + '" for "' + e.name + '"'
+                        }).join('\n ')
+                        , '\n'
+                    )
+                }
             }
-            , pass = false
-            , count = 0
-            ;
-
-        events.rows.forEach(function (event, i, a) {
-            event.pop();
-            if (event[0] != 'undefined')
-                if (event[1] != 'undefined')
-                    event.forEach(function (eventStr, ii, a) {
-                        textObj.event = eventStr;
-                        tags.forEach(function (tag, ind, ar) {
-                            textObj.tag = tag.parameter[0].value
-
-                            pass = (
-                                textObj.tag.search(textObj.event) > -1
-                                ||
-                                tag.name.search(textObj.event) > -1
-                            )
-
-                            if (pass) {
-                                count++
-                                console.log('\n')
-                                console.log('-----')
-                                //console.log(textObj.tag)
-                                console.log('-- tag end --')
-                                console.log(tag.name)
-                                console.log('textObj.tag: ' + textObj.tag.length)
-                                console.log('textObj.event: ' + textObj.event.length)
-                                console.log()
-                                console.log(event)
-                                console.log(eventStr)
-                                //console.log(textObj.tag)
-                                console.log('\n')
-                            }
-                        });
-
+            , data: function (data) {
+                console.log('\n')
+                console.log(data)
+                console.log('\n')
+            }
+        }
+        , accounts: function (jwtClient) {
+            console.log('----- GTM.accounts')
+            var self = this;
+            return new P(function (resolve, reject) {
+                self.tagManager.accounts.list(
+                    //TODO: change with consent screen?
+                    { auth: jwtClient }
+                    , function (err, response) {
+                        if (err) reject(err);
+                        resolve(response);
                     });
-        });
+            });
+        }
+        , containers: function (jwtClient, contId) {
+            console.log('----- GTM.containers')
+            var self = this;
+            return new P(function (resolve, reject) {
+                var accounts = self.accounts(jwtClient);
+                accounts.then(function (data) {
+                    /*
+                    TODO:
+                    Change for interface choice
+                    A gateway validation as well if user has no selected account to look at
+                    */
 
-        console.log(count + ' tags passed')
+                    self.logs.data(data);
 
-    });
-});
-*/
-console.log('Execution end');
-console.log('\n');
+                    var
+                        n = 1
+                        , id = data.accounts[n].accountId;
+
+                    console.log('Conta: ' + data[n].name + '\n')
+                    self.tagManager.accounts.containers.list(
+                        {
+                            //TODO: change with consent screen?
+                            auth: jwtClient
+                            , accountId: id
+                        }
+                        , function (err, response) {
+                            if (err) reject(err);
+                            resolve({
+                                accountId: id
+                                , data: response
+                            });
+                        });
+                })
+            });
+        }
+        , tags: function (jwtClient, type) {
+            console.log('----- GTM.tags')
+            var self = this;
+            return new P(function (resolve, reject) {
+                var containers = self.containers(jwtClient);
+                containers.then(function (data) {
+                    /*
+                    TODO:
+                    Change for interface choice
+                    A gateway validation as well if user has no selected account to look at
+                    */
+                    var
+                        accountId = data.accountId
+                        , containerNum = 1
+                        , containerId = data.data.containers[containerNum].containerId;
+
+                    console.log('Container: ' + data.data.containers[containerNum].name + '\n')
+
+                    self.tagManager.accounts.containers.tags.list({
+                        //TODO: change with consent screen?
+                        auth: jwtClient
+                        , accountId: accountId
+                        , containerId: containerId
+                    }
+                        , function (err, response) {
+                            if (err) reject(err);
+
+                            resolve(response)
+                            /* 
+                                                            var
+                                                                array = []
+                                                                , tags = response.tags
+                                                                ;
+                            
+                                                            tags.forEach(function (e, i, a) {
+                                                                if (e.type == 'type')
+                                                                    array.push(e);
+                                                            });
+                            
+                                                            resolve(array);
+                            */
+                        });
+                });
+            });
+        }
+    }
+}
+
+declaring.end();

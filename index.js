@@ -1,10 +1,8 @@
 'use strict';
 
-console.log('\n');
-console.log('-----');
-console.log('RUNNING index.js');
-console.log('-----');
-console.log('\n');
+var declaring = require('./src/js/declaring.js');
+
+declaring.start(__filename.split('\\').pop())
 
 var
     google = require('googleapis')
@@ -38,232 +36,32 @@ var
         , key.client_secret
         , key.redirect_uris
     )
-    , app = {
-        GA: {
-            analytics: google.analytics('v3')
-            , accounts: function (jwtClient) {
-                console.log('----- GA.accounts')
-                var self = this;
-                return new P(function (resolve, reject) {
-                    self.analytics.management.accounts.list
-                        //TODO: change with consent screen?
-                        ({ auth: jwtClient }
-                        , function (err, res) {
-                            if (err) reject(err);
-                            resolve(
-                                res.items.map(function (e, i) {
-                                    return {
-                                        //TODO: decide on result format
-                                        accountId: e.id
-                                        , name: e.name
-                                    };
-                                })
-                            );
-                        })
-                });
-            }
-            , webProperties: function (jwtClient) {
-                console.log('----- GA.properties');
-                var self = this;
-                return new P(function (resolve, reject) {
-                    var accounts = self.accounts(jwtClient)
-                    accounts.then(function (data) {
-                        /*
-                        TODO:
-                        Change for interface choice
-                        A gateway validation as well if user has no selected account to look at
-                        */
-                        var accountId = data[1].accountId;
-                        self.analytics.management.webproperties.list({
-                            //TODO: change with consent screen?
-                            auth: jwtClient
-                            , accountId: accountId
-                        }
-                            , function (err, res) {
-                                if (err) reject(err);
-                                resolve(res);
-                            })
-                    });
-                });
-            }
-            , profiles: function (jwtClient) {
-                console.log('----- GA.propertyViews');
-                var self = this;
-                return new P(function (resolve, reject) {
-                    var properties = self.webProperties(jwtClient)
-                    properties.then(function (data) {
-                        /*
-                        TODO:
-                        Change for interface choice
-                        A gateway validation as well if user has no selected account to look at
-                        */
-                        var webProperty = data.items[0];
-                        self.analytics.management.profiles.list(
-                            {
-                                //TODO: change with consent screen?
-                                auth: jwtClient
-                                , accountId: webProperty.accountId
-                                , webPropertyId: webProperty.id
-                                ,
-                            }, function (err, res) {
-                                if (err) reject(err)
-                                resolve(res)
-                            }
-                        )
-                    });
-                });
-            }
-            , events: function (jwtClient) {
-                console.log('----- GA.events');
-                var self = this;
-                return new P(function (resolve, reject) {
-                    var profiles = self.profiles(jwtClient)
-                    profiles.then(function (data) {
-                        /*
-                        TODO:
-                        Change for interface choice
-                        A gateway validation as well if user has no selected account to look at
-                        */
-                        var
-                            profile = data.items[0]
-                            , metrics = ['ga:totalEvents']
-                            , dimensions = [
-                                'ga:eventCategory'
-                                , 'ga:eventAction'
-                            ]
-                            , params = {
-                                //TODO: change with consent screen?
-                                auth: jwtClient
-                                , ids: 'ga:' + profile.id
-                                , 'start-date': '2016-09-01'
-                                , 'end-date': '2016-09-03'
-                                , metrics: metrics.join(', ')
-                                , dimensions: dimensions.join(', ')
-                            }
-                            ;
-                        self.analytics.data.ga.get(params, function (err, res) {
-                            if (err) reject(err)
-                            resolve(
-                                res
-                                /*
-                                    .rows.map(function (e, i) {
-                                    return {
-                                        category: e[0]
-                                        , action: e[1]
-                                        , label: e[2]
-                                    }
-
-                                }
-                        )
-                                */
-                            )
-                        })
-                    });
-                });
-            }
-        }
-        , GTM: {
-            tagManager: google.tagmanager('v1')
-            , accounts: function (jwtClient) {
-                console.log('----- GTM.accounts')
-                var self = this;
-                return new P(function (resolve, reject) {
-                    self.tagManager.accounts.list(
-                        //TODO: change with consent screen?
-                        { auth: jwtClient }
-                        , function (err, response) {
-                            if (err) reject(err);
-                            resolve(response.accounts);
-                        });
-                });
-            }
-            , containers: function (jwtClient) {
-                console.log('----- GTM.containers')
-                var self = this;
-                return new P(function (resolve, reject) {
-                    var accounts = self.accounts(jwtClient);
-                    accounts.then(function (data) {
-                        /*
-                        TODO:
-                        Change for interface choice
-                        A gateway validation as well if user has no selected account to look at
-                        */
-                        var id = data[1].accountId;
-                        console.log('Conta: ' + data[1].name + '\n')
-                        self.tagManager.accounts.containers.list(
-                            {
-                                //TODO: change with consent screen?
-                                auth: jwtClient
-                                , accountId: id
-                            }
-                            , function (err, response) {
-                                if (err) reject(err);
-                                resolve({
-                                    accountId: id
-                                    , data: response
-                                });
-                            });
-                    })
-                });
-            }
-            , tags: function (jwtClient, type) {
-                console.log('----- GTM.tags')
-                var self = this;
-                return new P(function (resolve, reject) {
-                    var containers = self.containers(jwtClient);
-                    containers.then(function (data) {
-                        /*
-                        TODO:
-                        Change for interface choice
-                        A gateway validation as well if user has no selected account to look at
-                        */
-                        var
-                            accountId = data.accountId
-                            , containerNum = 1
-                            , containerId = data.data.containers[containerNum].containerId;
-
-                        console.log('Container: '+data.data.containers[containerNum].name + '\n')
-
-                        self.tagManager.accounts.containers.tags.list({
-                            //TODO: change with consent screen?
-                            auth: jwtClient
-                            , accountId: accountId
-                            , containerId: containerId
-                        }
-                            , function (err, response) {
-                                if (err) reject(err);
-
-                                resolve(response)
-                                /* 
-                                                                var
-                                                                    array = []
-                                                                    , tags = response.tags
-                                                                    ;
-                                
-                                                                tags.forEach(function (e, i, a) {
-                                                                    if (e.type == 'type')
-                                                                        array.push(e);
-                                                                });
-                                
-                                                                resolve(array);
-                                */
-
-
-                            });
-                    });
-                });
-            }
-        }
-    }
+    , app = require('./src/js/app.js')
     ;
 
 
-app.GTM.accounts(jwtClient).then(function (data) {
-    console.log('data')
+var
+    metrics = ['ga:totalEvents']
+    , dimensions = [
+        'ga:eventCategory'
+        , 'ga:eventAction'
+    ], query = {
+        //TODO: change with consent screen?
+        auth: jwtClient
+        , 'start-date': '2016-09-01'
+        , 'end-date': '2016-09-03'
+        , metrics: metrics.join(', ')
+        , dimensions: dimensions.join(', ')
+    }
+
+app.GTM.containers(jwtClient, 1).then(function (data) {
+    console.log('FWE')
     console.log(data)
+    console.log('FWE')
 });
+
 /* 
-app.GA.events(jwtClient).then(function (events) {
+app.GA.events(jwtClient, 1, 0,0, query).then(function (events) {
     app.GTM.tags(jwtClient).then(function (tagsData) {
         console.log('tagsData')
         console.log(tagsData.tags[0])
@@ -319,5 +117,5 @@ app.GA.events(jwtClient).then(function (events) {
     });
 });
 */
-console.log('Execution end');
-console.log('\n');
+
+declaring.end()
