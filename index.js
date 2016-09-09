@@ -54,7 +54,7 @@ var
         , dimensions: dimensions.join(', ')
     }
 
-app.GTM.containers(jwtClient, 1).then(function (data) {
+app.GTM.tags(jwtClient, 1).then(function (data) {
     console.log('FWE')
     console.log(data)
     console.log('FWE')
