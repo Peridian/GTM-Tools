@@ -1,4 +1,4 @@
-'use strict';
+'use strict'
 
 var declaring = require('./src/js/declaring.js');
 
@@ -7,6 +7,7 @@ declaring.start(__filename.split('\\').pop())
 var
     google = require('googleapis')
     , P = require('bluebird')
+    , helper = require('./src/js/helper.js')
     , key =
         /* 
         require('./client_secret.json')
@@ -45,77 +46,89 @@ var
     , dimensions = [
         'ga:eventCategory'
         , 'ga:eventAction'
+        , 'ga:date'
     ], query = {
         //TODO: change with consent screen?
-        auth: jwtClient
-        , 'start-date': '2016-09-01'
-        , 'end-date': '2016-09-03'
+        //        auth: jwtClient
+        'start-date': '2016-08-01'
+        , 'end-date': '2016-09-01'
         , metrics: metrics.join(', ')
         , dimensions: dimensions.join(', ')
+        , ids: ''
     }
+    , retDateObj = strDate => {
+        var d = strDate.split('-');
+        return new Date(
+            d[0]
+            , d[1]
+            , d[2]
+        )
+    }
+    , dateObj = () => {
+        var obj = {
+            s: retDateObj(query['start-date'])
+            , e: retDateObj(query['end-date'])
+        };
 
-app.GTM.tags(jwtClient, 1).then(function (data) {
-    console.log('FWE')
-    console.log(data)
-    console.log('FWE')
-});
+        obj.len = ((obj.e - obj.s) / 1000 / 60 / 60 / 24);
 
-/* 
-app.GA.events(jwtClient, 1, 0,0, query).then(function (events) {
-    app.GTM.tags(jwtClient).then(function (tagsData) {
-        console.log('tagsData')
-        console.log(tagsData.tags[0])
-        console.log('-')
-        console.log(tagsData.tags[0].parameter)
-        console.log('-----')
-        var
-            textObj = {
-                event: ''
-                , tag: ''
-            }
-            , pass = false
-            , count = 0
+        return obj;
+    }
+    ;
+
+app.GA.events(jwtClient, query, 1, 0, 0).then(function (events) {
+
+    var
+        array = []
+        , len = 0
+        , one = 0
+        , other = 0
+        ;
+
+    events.rows.forEach(function (element, i) {
+        array.push('s')
+
+        console.log(array)
+        console.log('array[i]')
+        console.log(array[i])
+
+        console.log('element[0]')
+        console.log(element[0])
+
+        var newEvent = (
+            array[i].indexOf(element[0]) == -1
+            &&
+            array.indexOf(element[1]) == -1
+        )
             ;
 
-        events.rows.forEach(function (event, i, a) {
-            event.pop();
-            if (event[0] != 'undefined')
-                if (event[1] != 'undefined')
-                    event.forEach(function (eventStr, ii, a) {
-                        textObj.event = eventStr;
-                        tags.forEach(function (tag, ind, ar) {
-                            textObj.tag = tag.parameter[0].value
+        if (newEvent) {
 
-                            pass = (
-                                textObj.tag.search(textObj.event) > -1
-                                ||
-                                tag.name.search(textObj.event) > -1
-                            )
+            array.push(element)
+            len = array.length - 1
 
-                            if (pass) {
-                                count++
-                                console.log('\n')
-                                console.log('-----')
-                                //console.log(textObj.tag)
-                                console.log('-- tag end --')
-                                console.log(tag.name)
-                                console.log('textObj.tag: ' + textObj.tag.length)
-                                console.log('textObj.event: ' + textObj.event.length)
-                                console.log()
-                                console.log(event)
-                                console.log(eventStr)
-                                //console.log(textObj.tag)
-                                console.log('\n')
-                            }
-                        });
 
-                    });
-        });
+            array[len].push(1)
+            one++
 
-        console.log(count + ' tags passed')
+        } else {
+            len = array.length - 1
 
-    });
+            array[len][4]++
+            other++
+        }
+
+        //    console.log(element)
+        //  console.log(element[4])
+
+        console.log(array)
+
+    })
+    console.log('in if', one)
+    console.log('in else', other)
+
+
 });
-*/
+
 
 declaring.end()

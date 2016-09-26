@@ -5,12 +5,13 @@ module.exports = {
 
         console.log('\n');
         console.log('-----');
-        console.log(this.filename + ' - execution START')
+        console.log('---' + this.filename + ' - execution START')
         console.log('-----');
         console.log('\n');
     }
     , end: function (filename) {
-        console.log(this.filename + ' - execution END')
+        console.log('\n');
+        console.log('---' + this.filename + ' - execution END')
         console.log('\n');
     }
 }

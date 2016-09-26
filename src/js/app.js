@@ -7,51 +7,19 @@ declaring.start(__filename.split('\\').pop());
 var
     google = require('googleapis')
     , P = require('bluebird')
+    , helper = require('./helper.js')
     ;
 
 module.exports = {
     GA: {
         analytics: google.analytics('v3')
-        , logs: {
-            messages: {
-                empty: function (data) {
-                    console.log('- No ' + data.kind.split('#').pop() + ' to be found...')
-                    //console.log('- This ' + elementType + ' has no ')
-                }
-                , entering: function (data, self) {
-                    var item = data.items[0];
-                    console.log('\n')
-                    console.log('- Entering ' + item.kind.split('#').pop() + ' "' + item.name + '"...')
-                    console.log('\n')
-                }
-                , kind: function (data) {
-                    var kind = data.items[0].kind.split('#').pop();
-
-                    return 'aeiou'.indexOf(kind[0].toLowerCase()) !== -1
-                        ? 'n ' + kind
-                        : ' ' + kind
-                }
-                , choose: function (data, self) {
-                    var kind = data.items[0].kind.split('#').pop();
-
-                    kind = 'aeiou'.indexOf(kind[0].toLowerCase()) !== -1
-                        ? 'n ' + kind
-                        : ' ' + kind
-
-                    return console.log(
-                        '\n- Please, choose a' + self.logs.messages.kind(data) + ':\n'
-                        , data.items.map(function (e, i, a) {
-                            return '"' + i + '" for "' + e.name + '"'
-                        }).join('\n ')
-                        , '\n'
-                    )
-                }
-            }
-            , data: function (data) {
-                console.log('\n')
-                console.log(data)
-                console.log('\n')
-            }
+        , validate: data => {
+            if (data.items.length == 0)
+                return helper.logs.empty(data);
+            else if (data.items.length == 1) {
+                helper.logs.entering(data, self);
+                profile = data.items[0].id;
+            } else return self.messages.choose(data, self)
         }
         , accounts: function (jwtClient) {
             console.log('----- GA.accounts')
@@ -94,9 +62,9 @@ module.exports = {
                         if (data.items.length == 0)
                             return self.messages.empty(data);
                         else if (data.items.length == 1) {
-                            self.logs.messages.entering(data, self);
+                            helper.logs.messages.entering(data, self);
                             accountId = data.items[0].id;
-                        } else return self.logs.messages.choose(data, self)
+                        } else return helper.logs.choose(data, self)
 
                     self.analytics.management.webproperties.list({
                         //TODO: change with consent screen?
@@ -116,6 +84,7 @@ module.exports = {
             return new P(function (resolve, reject) {
                 var properties = self.webProperties(jwtClient, accNum)
                 properties.then(function (data) {
+
                     var
                         accountId = ''
                         , webPropertyId = ''
@@ -133,13 +102,13 @@ module.exports = {
                         accountId = item.accountId;
                         webPropertyId = item.id;
                     } else
+
                         if (data.items.length == 0)
-                            return self.logs.messages.empty(data);
+                            return helper.logs.messages.empty(data);
                         else if (data.items.length == 1) {
-                            self.logs.messages.entering(data, self);
                             accountId = data.items[0].accountId;
                             webPropertyId = data.items[0].id;
-                        } else return self.logs.messages.choose(data, self)
+                        } else return helper.logs.choose(data)
 
                     /*
                     TODO:
@@ -160,7 +129,8 @@ module.exports = {
                 });
             });
         }
-        , events: function (jwtClient, accNum, webPropNum, profNum, query) {
+        , events: function (jwtClient, query, accNum, webPropNum, profNum) {
+                
             console.log('----- GA.events');
             var self = this;
             return new P(function (resolve, reject) {
@@ -183,34 +153,15 @@ module.exports = {
                         , profile = ''
                         ;
 
-                    if (pass) {
-                        profile = data.items[profNum].id
-                        query.ids = 'ga:' + profile
-                    } else
-                        if (data.items.length == 0)
-                            return self.messages.empty(data);
-                        else if (data.items.length == 1) {
-                            self.messages.entering(data, self);
-                            profile = data.items[0].id;
+                    if (pass) profile = data.items[profNum].id
+                    else profile = helper.validate(data)
 
-                        } else return self.messages.choose(data, self)
+                    query.ids = 'ga:' + profile
+                    query.auth = jwtClient
 
                     self.analytics.data.ga.get(query, function (err, res) {
                         if (err) reject(err)
-                        resolve(
-                            res
-                            /*
-                                .rows.map(function (e, i) {
-                                return {
-                                    category: e[0]
-                                    , action: e[1]
-                                    , label: e[2]
-                                }
-         
-                            }
-                    )
-                            */
-                        )
+                        resolve(res)
                     })
                 });
             });
@@ -218,51 +169,6 @@ module.exports = {
     }
     , GTM: {
         tagManager: google.tagmanager('v1')
-        , logs: {
-            data: function (data) {
-                console.log('\n')
-                console.log(data)
-                console.log('\n')
-            }
-            , messages: {
-                empty: function (data) {
-                    throw '\n- No ' + Object.keys(data)[2] + ' to be found...\n'
-                }
-                , entering: function (data, self) {
-                    var account = data.accounts[0]
-                    console.info(
-                        '\n- Entering '
-                        + Object.keys(data)[0].slice(0, -1)
-                        + ' "' + account.name
-                        + '"...\n'
-                    )
-                    return account.accountId
-                }
-                , kind: function (data) {
-                    var kind = data.accounts[0].kind.split('#').pop();
-
-                    return 'aeiou'.indexOf(kind[0].toLowerCase()) !== -1
-                        ? 'n ' + kind
-                        : ' ' + kind
-                }
-                , choose: function (self, data) {
-                    var message = Object.keys(data)[0].slice(0, -1);
-
-                    message = 'aeiou'.indexOf(message[0].toLowerCase()) !== -1
-                        ? 'n ' + message
-                        : ' ' + message
-
-                    message =
-                        '\n- Please, choose a'
-                        + message
-                        + ':\n'
-                        + data.accounts.map(function (e, i, a) { return ' "' + i + '" for "' + e.name + '"' }).join('\n')
-                        + '\n'
-
-                    throw message;
-                }
-            }
-        }
         , accounts: function (jwtClient) {
             console.log('----- GTM.accounts')
             var self = this;
@@ -298,18 +204,13 @@ module.exports = {
                                 &&
                                 data.accounts.length > 0
                                 &&
-                                (contId + 1) <= data.accounts.length
+                                contId <= (data.accounts.length - 1)
                             )
                         }
                         ;
 
-                    self.logs.data(obj)
-
                     if (obj.pass) obj.id = data.accounts[contId].accountId;
-                    else
-                        if (data.accounts.length == 0) self.logs.messages.empty(self, data);
-                        else if (data.accounts.length == 1) obj.id = self.logs.messages.entering(data, self);
-                        else self.logs.messages.choose(self, data)
+                    else obj.id = helper.validate(data)
 
                     self.tagManager.accounts.containers.list(
                         {
@@ -324,23 +225,55 @@ module.exports = {
                 })
             });
         }
-        , tags: function (jwtClient, contId) {
+        , tags: function (jwtClient, contNum) {
             console.log('----- GTM.tags')
             var self = this;
             return new P(function (resolve, reject) {
-                var containers = self.containers(jwtClient, contId);
+                var containers = self.containers(jwtClient, contNum);
                 containers.then(function (data) {
                     /*
                     TODO:
                     Change for interface choice
                     A gateway validation as well if user has no selected account to look at
                     */
-                    var
-                        accountId = data.accountId
-                        , containerNum = 1
-                        , containerId = data.data.containers[containerNum].containerId;
 
-                    console.log('Container: ' + data.data.containers[containerNum].name + '\n')
+                    helper.logs.data(data);
+                    /* 
+                                        var
+                                            obj = {
+                                                accountId: data.containers[contNum].accountId
+                                                , containerNum: contNum
+                                                , containerId: data.containers[contNum].containerId
+                                                , hasNumInput: (contNum != undefined)
+                                                , elementsLength: data.containers.lengthc
+                                                , containers: data.containers
+                                                , pass:
+                                                (
+                                                    contNum != undefined
+                                                    &&
+                                                    contNum <= (data.containers.length + 1)
+                                                )
+                                                    ? 0
+                                                    : data.containers.length == 0
+                                                        ? 1
+                                                        : data.containers.length == 1
+                                                            ? 2 : 3
+                                            }
+                                            ;
+                    
+                    helper.logs.data(obj);
+     
+                    if (obj.pass == 0)
+                        var
+                            accountId = obj.accountId
+                            , containerId = obj.containerId
+                            ;
+                    if (obj.pass == 1)
+                        helper.logs.empty()
+                    if (obj.pass == 2)
+                        if (obj.pass == 3)
+                    */
+
 
                     self.tagManager.accounts.containers.tags.list({
                         //TODO: change with consent screen?
@@ -353,17 +286,17 @@ module.exports = {
 
                             resolve(response)
                             /* 
-                                                            var
-                                                                array = []
-                                                                , tags = response.tags
-                                                                ;
-                            
-                                                            tags.forEach(function (e, i, a) {
-                                                                if (e.type == 'type')
-                                                                    array.push(e);
-                                                            });
-                            
-                                                            resolve(array);
+                            var
+                                array = []
+                                , tags = response.tags
+                                ;
+     
+                            tags.forEach(function (e, i, a) {
+                                if (e.type == 'type')
+                                    array.push(e);
+                            });
+     
+                            resolve(array);
                             */
                         });
                 });
