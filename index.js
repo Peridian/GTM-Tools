@@ -51,7 +51,7 @@ var
         //TODO: change with consent screen?
         //        auth: jwtClient
         'start-date': '2016-08-01'
-        , 'end-date': '2016-09-01'
+        , 'end-date': '2016-08-02'
         , metrics: metrics.join(', ')
         , dimensions: dimensions.join(', ')
         , ids: ''
@@ -79,54 +79,50 @@ var
 app.GA.events(jwtClient, query, 1, 0, 0).then(function (events) {
 
     var
-        array = []
+        mappedEvents = events.rows.map(function (e, i, a) {
+            return {
+                category: e[0]
+                , action: e[1]
+                , date: e[2]
+                , total: e[3]
+                , fired: 0
+            }
+
+        })
+        , array = []
+        , arrayAux = []
         , len = 0
         , one = 0
         , other = 0
+        , date = 0
         ;
 
-    events.rows.forEach(function (element, i) {
-        array.push('s')
+    console.log(mappedEvents)
+    console.log('\n')
 
-        console.log(array)
-        console.log('array[i]')
-        console.log(array[i])
+    mappedEvents.forEach(function (e, i, a) {
 
-        console.log('element[0]')
-        console.log(element[0])
+        var obj = array.filter(function (ee) {
+            return (
+                e.category == ee.category
+                &&
+                e.action == ee.action
+            )
+        });
 
-        var newEvent = (
-            array[i].indexOf(element[0]) == -1
-            &&
-            array.indexOf(element[1]) == -1
-        )
-            ;
+        console.log('\n----- obj')
+        console.log(obj)
 
-        if (newEvent) {
+        obj = obj[0]
 
-            array.push(element)
-            len = array.length - 1
+        if (!obj) array.push(e)
+
+        len = array.length - 1
+
+        array[len].fired++;
 
 
-            array[len].push(1)
-            one++
-
-        } else {
-            len = array.length - 1
-
-            array[len][4]++
-            other++
-        }
-
-        //    console.log(element)
-        //  console.log(element[4])
-
-        console.log(array)
-
-    })
-    console.log('in if', one)
-    console.log('in else', other)
-
+    });
 
 });
 
