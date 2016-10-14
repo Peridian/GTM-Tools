@@ -7,6 +7,7 @@ declaring.start(__filename.split('\\').pop())
 var
     google = require('googleapis')
     , P = require('bluebird')
+    , fs = require('fs')
     , helper = require('./src/js/helper.js')
     , key =
         /* 
@@ -40,7 +41,6 @@ var
     , app = require('./src/js/app.js')
     ;
 
-
 var
     metrics = ['ga:totalEvents']
     , dimensions = [
@@ -51,7 +51,7 @@ var
         //TODO: change with consent screen?
         //        auth: jwtClient
         'start-date': '2016-08-01'
-        , 'end-date': '2016-08-02'
+        , 'end-date': '2016-08-04'
         , metrics: metrics.join(', ')
         , dimensions: dimensions.join(', ')
         , ids: ''
@@ -74,57 +74,72 @@ var
 
         return obj;
     }
-    ;
+    , prettyMuchEverthing = (events) => {
+        /*
+                    (function () {
+                        var
+                            d1 = new Date(query['start-date'].split('-').reverse())
+                            , d2 = new Date(query['end-date'].split('-').reverse())
+                        console.log('GA.events --- ' + Math.ceil((d2 - d1) / 1000 / 60 / 60 / 24 / 30) + ' day period\n')
+                    })()
+        */
 
-app.GA.events(jwtClient, query, 1, 0, 0).then(function (events) {
+        var
+            mappedEvents = events.rows
+                .map(function (e, i, a) {
+                    return {
+                        category: e[0]
+                        , action: e[1]
+//                        , date: e[2]
+                        //                    , totalDaysFired: 0
+                        //                  , averageRecurrency: 0
+                        //                , presence: 0
+                    }
+                })
+            /*
+            */
+            , array = []
+            , category = ''
+            , action = ''
+            , obj
+            , pass
+            ;
 
-    var
-        mappedEvents = events.rows.map(function (e, i, a) {
-            return {
-                category: e[0]
-                , action: e[1]
-                , date: e[2]
-                , total: e[3]
-                , fired: 0
+        mappedEvents.forEach((e, i, a) => {
+
+            pass = (
+                action != e.action
+                ||
+                category != e.category
+            )
+
+            if (pass) {
+                category = e.category
+                action = e.action
+                array.push(e)
             }
 
-        })
-        , array = []
-        , arrayAux = []
-        , len = 0
-        , one = 0
-        , other = 0
-        , date = 0
-        ;
-
-    console.log(mappedEvents)
-    console.log('\n')
-
-    mappedEvents.forEach(function (e, i, a) {
-
-        var obj = array.filter(function (ee) {
-            return (
-                e.category == ee.category
-                &&
-                e.action == ee.action
-            )
         });
 
-        console.log('\n----- obj')
-        console.log(obj)
+        console.log(array)
+        //        console.log(array)
 
-        obj = obj[0]
+        if (false)
+            fs.writeFileSync('eventsGA.json', JSON.stringify(events))
+    }
 
-        if (!obj) array.push(e)
+if (false)
+    app.GA.events(jwtClient, query, 1, 0, 0).then(prettyMuchEverthing);
+else {
+    console.log('---- Reading sample file')
+    fs.readFile('eventsGA.json', 'utf-8', (err, data) => {
+        if (err) throw err
 
-        len = array.length - 1
+        var events = JSON.parse(data)
 
-        array[len].fired++;
+        prettyMuchEverthing(events)
+    })
 
-
-    });
-
-});
-
+}
 
 declaring.end()

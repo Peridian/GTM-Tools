@@ -130,7 +130,14 @@ module.exports = {
             });
         }
         , events: function (jwtClient, query, accNum, webPropNum, profNum) {
-                
+
+            (function () {
+                var
+                    d1 = new Date(query['start-date'].split('-').reverse())
+                    , d2 = new Date(query['end-date'].split('-').reverse())
+                console.log('GA.events --- ' + Math.ceil((d2 - d1) / 1000 / 60 / 60 / 24 / 30) + ' day period\n')
+            })()
+
             console.log('----- GA.events');
             var self = this;
             return new P(function (resolve, reject) {
